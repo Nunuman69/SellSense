@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SellSense Prototype
 
 A prototype for a real-time sales assistant that uses emotion and tone detection to improve virtual communication.
@@ -28,3 +29,7 @@ streamlit run app.py
 - [ ] Integrate microphone and sentiment analysis
 - [ ] Build suggestion logic based on model outputs
 - [ ] Build Streamlit UI
+=======
+# SellSense
+Real-time AI tool for emotion and tone analysis during virtual sales meetings.
+>>>>>>> dbaa35e7d63048a93530b108f91bc0c796c4f215
