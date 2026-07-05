@@ -6,35 +6,32 @@ from fer.fer import FER
 
 
 class EmotionDetector:
-    """Detect facial emotions in individual OpenCV frames."""
+    """Detect and annotate facial emotions in OpenCV frames."""
 
     def __init__(self) -> None:
         self.detector = FER()
 
-    def analyze_frame(
-        self,
-        frame: Any,
-    ) -> tuple[Any, list[dict[str, Any]]]:
-        """
-        Analyze one frame and return:
-        1. A copy of the frame with annotations.
-        2. Structured emotion-detection results.
-        """
+    def detect(self, frame: Any) -> list[dict[str, Any]]:
+        """Detect faces and return structured emotion results."""
 
-        annotated_frame = frame.copy()
         detections = self.detector.detect_emotions(frame)
         results: list[dict[str, Any]] = []
 
         for detection in detections:
-            x, y, width, height = detection["box"]
-            emotions = detection["emotions"]
+            raw_x, raw_y, raw_width, raw_height = detection["box"]
+
+            x = max(0, int(raw_x))
+            y = max(0, int(raw_y))
+            width = max(0, int(raw_width))
+            height = max(0, int(raw_height))
+
+            emotions = {
+                name: float(score)
+                for name, score in detection["emotions"].items()
+            }
 
             dominant_emotion = max(emotions, key=emotions.get)
-            confidence = float(emotions[dominant_emotion])
-
-            # FER can occasionally return negative coordinates.
-            x = max(0, x)
-            y = max(0, y)
+            confidence = emotions[dominant_emotion]
 
             results.append(
                 {
@@ -45,6 +42,22 @@ class EmotionDetector:
                 }
             )
 
+        return results
+
+    def annotate_frame(
+        self,
+        frame: Any,
+        results: list[dict[str, Any]],
+    ) -> Any:
+        """Draw face boxes and emotion labels on a frame."""
+
+        annotated_frame = frame.copy()
+
+        for result in results:
+            x, y, width, height = result["box"]
+            emotion = result["emotion"]
+            confidence = result["confidence"]
+
             cv2.rectangle(
                 annotated_frame,
                 (x, y),
@@ -53,7 +66,7 @@ class EmotionDetector:
                 2,
             )
 
-            label = f"{dominant_emotion}: {confidence:.0%}"
+            label = f"{emotion.title()}: {confidence:.0%}"
 
             cv2.putText(
                 annotated_frame,
@@ -65,11 +78,22 @@ class EmotionDetector:
                 2,
             )
 
+        return annotated_frame
+
+    def analyze_frame(
+        self,
+        frame: Any,
+    ) -> tuple[Any, list[dict[str, Any]]]:
+        """Detect emotions and return an annotated frame and results."""
+
+        results = self.detect(frame)
+        annotated_frame = self.annotate_frame(frame, results)
+
         return annotated_frame, results
 
 
 def run_webcam() -> None:
-    """Run the detector as a standalone OpenCV webcam application."""
+    """Run SellSense as a standalone OpenCV webcam application."""
 
     detector = EmotionDetector()
     camera = cv2.VideoCapture(0)
