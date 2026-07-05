@@ -1,21 +1,81 @@
 import sys
+from typing import Any
 
 import cv2
 from fer.fer import FER
 
 
-def detect_emotion() -> None:
-    """Open the webcam and display real-time facial emotion predictions."""
+class EmotionDetector:
+    """Detect facial emotions in individual OpenCV frames."""
 
-    # Start with FER's default face detector.
-    # We can enable MTCNN after the basic version works.
-    detector = FER()
+    def __init__(self) -> None:
+        self.detector = FER()
 
+    def analyze_frame(
+        self,
+        frame: Any,
+    ) -> tuple[Any, list[dict[str, Any]]]:
+        """
+        Analyze one frame and return:
+        1. A copy of the frame with annotations.
+        2. Structured emotion-detection results.
+        """
+
+        annotated_frame = frame.copy()
+        detections = self.detector.detect_emotions(frame)
+        results: list[dict[str, Any]] = []
+
+        for detection in detections:
+            x, y, width, height = detection["box"]
+            emotions = detection["emotions"]
+
+            dominant_emotion = max(emotions, key=emotions.get)
+            confidence = float(emotions[dominant_emotion])
+
+            # FER can occasionally return negative coordinates.
+            x = max(0, x)
+            y = max(0, y)
+
+            results.append(
+                {
+                    "emotion": dominant_emotion,
+                    "confidence": confidence,
+                    "box": (x, y, width, height),
+                    "emotions": emotions,
+                }
+            )
+
+            cv2.rectangle(
+                annotated_frame,
+                (x, y),
+                (x + width, y + height),
+                (0, 255, 0),
+                2,
+            )
+
+            label = f"{dominant_emotion}: {confidence:.0%}"
+
+            cv2.putText(
+                annotated_frame,
+                label,
+                (x, max(25, y - 10)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 0),
+                2,
+            )
+
+        return annotated_frame, results
+
+
+def run_webcam() -> None:
+    """Run the detector as a standalone OpenCV webcam application."""
+
+    detector = EmotionDetector()
     camera = cv2.VideoCapture(0)
 
     if not camera.isOpened():
         print("Error: Could not open the webcam.")
-        print("Check Windows camera permissions and close other camera apps.")
         return
 
     print("SellSense emotion detector started.")
@@ -26,43 +86,15 @@ def detect_emotion() -> None:
             success, frame = camera.read()
 
             if not success:
-                print("Error: Could not read a frame from the webcam.")
+                print("Error: Could not read a webcam frame.")
                 break
 
-            detections = detector.detect_emotions(frame)
+            annotated_frame, _ = detector.analyze_frame(frame)
 
-            for detection in detections:
-                x, y, width, height = detection["box"]
-                emotions = detection["emotions"]
-
-                dominant_emotion = max(emotions, key=emotions.get)
-                confidence = emotions[dominant_emotion]
-
-                # Prevent negative coordinates from drawing outside the frame.
-                x = max(0, x)
-                y = max(0, y)
-
-                cv2.rectangle(
-                    frame,
-                    (x, y),
-                    (x + width, y + height),
-                    (0, 255, 0),
-                    2,
-                )
-
-                label = f"{dominant_emotion}: {confidence:.0%}"
-
-                cv2.putText(
-                    frame,
-                    label,
-                    (x, max(25, y - 10)),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (0, 255, 0),
-                    2,
-                )
-
-            cv2.imshow("SellSense Emotion Detection", frame)
+            cv2.imshow(
+                "SellSense Emotion Detection",
+                annotated_frame,
+            )
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
@@ -80,4 +112,4 @@ def detect_emotion() -> None:
 
 
 if __name__ == "__main__":
-    detect_emotion()
+    run_webcam()
