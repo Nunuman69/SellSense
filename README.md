@@ -164,8 +164,8 @@ The application is intended as a communication-assistance experiment—not as a 
 - [x] Snapshot analysis in Streamlit
 - [x] Live WebRTC emotion analysis
 - [x] Basic sales-response suggestions
-- [ ] Track emotion changes during a session
-- [ ] Generate an end-of-session summary
+- [x] Track emotion changes during a session
+- [x] Generate an end-of-session summary
 - [ ] Add microphone capture and transcription
 - [ ] Add voice tone and sentiment analysis
 - [ ] Combine video and audio signals
