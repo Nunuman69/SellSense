@@ -1,4 +1,7 @@
 streamlit
+streamlit-webrtc==0.75.0
+av
+numpy
 fer
 tensorflow
 opencv-contrib-python==4.11.0.86
