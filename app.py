@@ -12,6 +12,7 @@ from streamlit_webrtc import webrtc_streamer
 
 from emotion_detector import EmotionDetector
 from session_tracker import SessionTracker
+from tone_analyzer import ToneAnalyzer
 
 
 PROCESS_EVERY_N_FRAMES = 5
@@ -69,6 +70,12 @@ st.set_page_config(
 def load_model_resources() -> tuple[EmotionDetector, Any]:
     """Load the model once and protect it for WebRTC callback access."""
     return EmotionDetector(), threading.Lock()
+
+
+@st.cache_resource(show_spinner="Loading local speech model...")
+def load_tone_analyzer() -> ToneAnalyzer:
+    """Load the speech-to-text and transcript-analysis resources once."""
+    return ToneAnalyzer(model_size="base.en")
 
 
 def get_session_tracker() -> SessionTracker:
@@ -385,7 +392,7 @@ st.warning(
 
 mode = st.radio(
     "Analysis mode",
-    ("Live video", "Snapshot"),
+    ("Live video", "Snapshot", "Audio analysis"),
     horizontal=True,
 )
 
@@ -419,7 +426,7 @@ if mode == "Live video":
         tracker.reset()
 
     video_callback = build_video_callback(
-        detector,pp
+        detector,
         detector_lock,
         tracker,
     )
@@ -444,7 +451,7 @@ if mode == "Live video":
 
     render_session_dashboard(tracker)
 
-else:
+elif mode == "Snapshot":
     st.subheader("Snapshot analysis")
 
     camera_image = st.camera_input("Capture a customer expression")
@@ -511,3 +518,112 @@ else:
                         st.write(
                             f"**{emotion_name.title()}**: {score:.1%}"
                         )
+
+
+else:
+    st.subheader("Audio communication analysis")
+    st.write(
+        "Record a short sales pitch. SellSense will transcribe it locally "
+        "and estimate speaking pace, filler-word use, pauses, and the "
+        "sentiment of the transcript."
+    )
+    st.info(
+        "This milestone analyzes speech delivery and transcript wording. "
+        "It does not determine a speaker's true emotional state."
+    )
+
+    audio_value = st.audio_input(
+        "Record a 10–30 second sales pitch",
+        sample_rate=16000,
+        key="sales_pitch_audio",
+    )
+
+    if audio_value is not None:
+        st.audio(audio_value)
+
+        if st.button(
+            "Analyze recording",
+            type="primary",
+            use_container_width=True,
+        ):
+            try:
+                analyzer = load_tone_analyzer()
+                with st.spinner("Transcribing and analyzing your recording..."):
+                    st.session_state.audio_analysis_result = (
+                        analyzer.analyze_audio(audio_value.getvalue())
+                    )
+            except Exception as error:
+                st.session_state.pop("audio_analysis_result", None)
+                st.error(f"Audio analysis failed: {error}")
+
+    result = st.session_state.get("audio_analysis_result")
+
+    if result:
+        st.markdown("### Transcript")
+        if result["transcript"]:
+            st.text_area(
+                "Transcribed speech",
+                value=result["transcript"],
+                height=140,
+                disabled=True,
+                label_visibility="collapsed",
+            )
+        else:
+            st.warning("No clear speech was transcribed.")
+
+        metric_one, metric_two, metric_three, metric_four = st.columns(4)
+        metric_one.metric(
+            "Duration",
+            f"{result['duration_seconds']:.1f}s",
+        )
+        metric_two.metric("Words", result["word_count"])
+        metric_three.metric(
+            "Speaking pace",
+            f"{result['words_per_minute']:.0f} WPM",
+            result["pace_label"],
+        )
+        metric_four.metric(
+            "Transcript sentiment",
+            result["sentiment_label"],
+            f"{result['sentiment_scores']['compound']:+.2f}",
+        )
+
+        second_one, second_two, second_three = st.columns(3)
+        second_one.metric("Filler words", result["filler_total"])
+        second_two.metric(
+            "Fillers per 100 words",
+            f"{result['filler_rate_per_100_words']:.1f}",
+        )
+        second_three.metric(
+            "Pauses over 1 second",
+            result["long_pause_count"],
+        )
+
+        st.markdown("### Communication feedback")
+        for recommendation in result["recommendations"]:
+            st.write(f"- {recommendation}")
+
+        if result["filler_counts"]:
+            st.markdown("### Detected filler words")
+            filler_frame = pd.DataFrame(
+                [
+                    {"Filler": filler, "Count": count}
+                    for filler, count in result["filler_counts"].items()
+                ]
+            )
+            st.dataframe(
+                filler_frame,
+                hide_index=True,
+                use_container_width=True,
+            )
+
+        with st.expander("Technical details"):
+            st.write(
+                f"Detected language: **{result['language']}** "
+                f"({result['language_probability']:.1%} confidence)"
+            )
+            st.write(
+                "Approximate non-speech share: "
+                f"**{result['approximate_pause_ratio']:.1%}**"
+            )
+            st.json(result["sentiment_scores"])

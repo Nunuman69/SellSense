@@ -6,3 +6,5 @@ fer
 tensorflow
 pandas
 opencv-contrib-python==4.11.0.86
+faster-whisper
+vaderSentiment
